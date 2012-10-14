@@ -1,0 +1,96 @@
+body,
+html {
+margin: 0;
+padding: 0;
+color: black;
+background: #eee;
+height: 100%;
+overflow: hidden;
+}
+
+#wrap {
+margin: 0 auto;
+height: 100%;
+}
+
+#header {
+margin: 0 auto;
+padding: 0;
+}
+
+#header h1 {
+margin: 0 auto;
+padding: .4em;
+color: black;
+}
+
+#content {
+margin: 0 auto;
+}
+
+#center {
+float: left;
+margin: 0 auto;
+padding-left: 135px;
+}
+
+#sidebar {
+position: fixed;
+top: 20px;
+right: 20px;
+color: #000;
+float: right;
+width: 270px;
+clear: none;
+}
+
+#buttons {
+text-align: center;
+}
+
+#buttons input {
+padding: .5em;
+margin: 12px;
+}
+
+#sidebar-elements h3 {
+font-size: 1.3em;
+color: #e8ecf0;
+background-color: #53697f;
+padding: .4em;
+margin: 0 5px;
+}
+
+.workflow-items {
+list-style-type: none;
+margin: 0;
+padding-left: 10px;
+padding-bottom: 10px;
+}
+
+.workflow-items li {
+background-repeat: no-repeat;
+background-position: 0 .5em;
+padding: .5em 0 .5em 30px;
+background-size: 24px 24px;
+}
+
+#workflow-item-form {
+background-image: url('flowcanvas/res/form128.png');
+}
+
+#workflow-item-exclusivechoice {
+background-image: url('flowcanvas/res/exclusivechoice48.png');
+}
+
+#workflow-item-multichoice {
+background-image: url('flowcanvas/res/exclusivechoice48.png');
+}
+
+#workflow-item-email {
+background-image: url('flowcanvas/res/email256.png');
+}
+
+#workflow-item-database {
+background-image: url('flowcanvas/res/db256.png');
+}
