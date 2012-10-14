@@ -32,13 +32,11 @@ $(document).ready(function() {
     form.move(0, -250);
     form.anchor(undefined, 'RightMiddle');
 
-    var email = new FlowCanvasImg(canvas, 'flowcanvas/res/email256.png', 100, 100);
+    var email = new FlowCanvasMail(canvas);
     email.move(-80, 50);
-    email.make_target('LeftMiddle');
 
-    var db = new FlowCanvasImg(canvas, 'flowcanvas/res/db256.png', 100, 100);
+    var db = new FlowCanvasDB(canvas);
     db.move(80, 50);
-    db.make_target('LeftMiddle');
 
     form.connect(db);
     //form.connect(email);
@@ -50,8 +48,8 @@ $(document).ready(function() {
             },
             "cursorAt": {'right': -5},
             "stop": function(event, ui) {
-                var cls = flowcanvas_elements[$(this).attr('name')];
-                form.insert_at(event, new cls());
+                var cls = flowcanvas_items[$(this).attr('name')];
+                var obj = new cls(canvas);
             }
         });
     });
@@ -73,11 +71,6 @@ $(document).ready(function() {
             </div-->
 
             <div id="sidebar-elements">
-                <h3>Forms</h3>
-                <ul class="workflow-items">
-                    <li id="workflow-item-form" name="form">Custom Form</li>
-                </ul>
-
                 <h3>Control Flow</h3>
                 <ul class="workflow-items">
                     <li id="workflow-item-exclusivechoice" name="exclusivechoice">Exclusive Choice</li>
@@ -86,8 +79,8 @@ $(document).ready(function() {
 
                 <h3>Activities</h3>
                 <ul class="workflow-items">
-                    <li id="workflow-item-email" name="email">Send Mail</li>
-                    <li id="workflow-item-database" name="database">Save</li>
+                    <li id="workflow-item-mail" name="mail">Send Mail</li>
+                    <li id="workflow-item-db" name="db">Save</li>
                 </ul>
             </div>
         </div>

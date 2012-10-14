@@ -71,6 +71,8 @@ var FlowCanvasTrackable = function() {
 // ======================================================================
 // Canvas Items
 // ======================================================================
+var flowcanvas_items = {};
+
 function FlowCanvasItem(canvas, div, width, height) {
     if (arguments.length === 0) return;
     this.canvas = canvas;
@@ -78,32 +80,57 @@ function FlowCanvasItem(canvas, div, width, height) {
     this.div = div;
     this._overlay = undefined;
     this._toggle_options = {};
-    this._input = undefined;
-    this._output = undefined;
+    this._inputs = [];
+    this._outputs = [];
     var that = this;
 
-    this.anchor = function(input, output) {
-        if (input) {
-            this.input = this.canvas.jp.addEndpoint(that.container, {
+    this.anchor = function(inputs, outputs) {
+        // Normalize arguments.
+        if (typeof inputs === 'string')
+            inputs = [inputs];
+        else if (typeof inputs === 'undefined')
+            inputs = [];
+        if (typeof outputs === 'string')
+            outputs = [outputs];
+        else if (typeof outputs === 'undefined')
+            outputs = [];
+
+        // Remove existing endpoints.
+        $.each(this._inputs, function(index, endpoint) {
+            that.canvas.jp.deleteEndpoint(endpoint);
+        });
+        $.each(this._outputs, function(index, endpoint) {
+            that.canvas.jp.deleteEndpoint(endpoint);
+        });
+        this._inputs.length = 0;
+        this._outputs.length = 0;
+
+        // Add incoming endpoints.
+        $.each(inputs, function(index, input) {
+            var endpoint = that.canvas.jp.addEndpoint(that.container, {
                 isTarget: true,
                 anchor: input
             });
-        }
-        if (output) {
-            this.output = this.canvas.jp.addEndpoint(that.container, {
+            that._inputs.push(endpoint);
+        });
+
+        // Add outgoing endpoints.
+        $.each(outputs, function(index, output) {
+            var endpoint = that.canvas.jp.addEndpoint(that.container, {
                 isSource: true,
                 anchor: output,
                 maxConnections: -1
             });
-        }
+            that._outputs.push(endpoint);
+        });
     };
 
     this.make_target = function(anchor) {
         if (typeof anchor === 'undefined')
             anchor = 'Continuous';
-        this.input = this.container;
+        this._inputs = [this.container];
         this.canvas.jp.makeTarget(this.container, {
-            endpoint: ['Dot', { radius: 40, cssClass: 'formcanvas-anchor-invisible' }],
+            endpoint: ['Dot', { radius: 20, cssClass: 'flowcanvas-anchor-invisible' }],
             isTarget: true,
             anchor: anchor
         });
@@ -142,11 +169,11 @@ function FlowCanvasItem(canvas, div, width, height) {
     };
 
     this.connect = function(target) {
-        if (!this.output || !target.input)
+        if (!this._outputs.length || !target._inputs.length)
             return;
         that.canvas.jp.connect({
-            source: this.output,
-            target: target.input
+            source: this._outputs[0],
+            target: target._inputs[0]
         });
     };
 
@@ -183,9 +210,14 @@ function FlowCanvasItem(canvas, div, width, height) {
     });
 }
 
+// -----------------------
+// Image
+// -----------------------
 FlowCanvasItem.prototype = new FlowCanvasTrackable();
+flowcanvas_items.item = FlowCanvasItem;
 
 function FlowCanvasImg(canvas, src, width, height) {
+    if (arguments.length === 0) return;
     var img = $('<img/>');
     img.attr('src', src);
     FlowCanvasItem.call(this, canvas, img, width, height);
@@ -193,6 +225,44 @@ function FlowCanvasImg(canvas, src, width, height) {
 
 FlowCanvasImg.prototype = new FlowCanvasItem();
 FlowCanvasImg.prototype.constructor = FlowCanvasImg;
+flowcanvas_items.image = FlowCanvasImg;
+
+// -----------------------
+// Exclusive choice
+// -----------------------
+function FlowCanvasExclusiveChoice(canvas) {
+    FlowCanvasImg.call(this,
+                       canvas, 'flowcanvas/res/exclusivechoice48.png', 48, 48);
+    this.anchor('LeftMiddle', ['TopCenter', 'BottomCenter']);
+}
+
+FlowCanvasExclusiveChoice.prototype = new FlowCanvasImg();
+FlowCanvasExclusiveChoice.prototype.constructor = FlowCanvasExclusiveChoice;
+flowcanvas_items.exclusivechoice = FlowCanvasExclusiveChoice;
+
+// -----------------------
+// Mail
+// -----------------------
+function FlowCanvasMail(canvas) {
+    FlowCanvasImg.call(this, canvas, 'flowcanvas/res/mail256.png', 96, 96);
+    this.make_target('LeftMiddle');
+}
+
+FlowCanvasMail.prototype = new FlowCanvasImg();
+FlowCanvasMail.prototype.constructor = FlowCanvasMail;
+flowcanvas_items.mail = FlowCanvasMail;
+
+// -----------------------
+// Database
+// -----------------------
+function FlowCanvasDB(canvas) {
+    FlowCanvasImg.call(this, canvas, 'flowcanvas/res/db256.png', 96, 96);
+    this.make_target('LeftMiddle');
+}
+
+FlowCanvasDB.prototype = new FlowCanvasImg();
+FlowCanvasDB.prototype.constructor = FlowCanvasDB;
+flowcanvas_items.db = FlowCanvasDB;
 
 // ======================================================================
 // Canvas
@@ -207,13 +277,19 @@ var FlowCanvas = function(div) {
         Overlays: [ ['PlainArrow', { location: 0.99, width: 18, length: 23 }] ],
         //Connector: ['Flowchart', { stub: 35, gap: 10} ],
         //Endpoint: ['Dot', { cssClass: 'formcanvas-anchor-invisible' }],
-        Endpoint: ['Dot', { radius: 12 }],
+        Endpoint: ['Dot', { radius: 10 }],
         Container: this.div
     });
 
-    this.add = function(item) {
-        item._attach(this.div);
-        return item;
+    this.hits = function(event) {
+        // Make sure that the element was dropped within this canvas.
+        var pointing_at = event.toElement;
+        if (!pointing_at)
+            pointing_at = event.relatedTarget;
+        if (!pointing_at)
+            pointing_at = document.elementFromPoint(event.pageX, event.pageY);
+        var target = $(pointing_at);
+        return target.parents().andSelf().filter('.flowcanvas').length !== 0;
     };
 
     this.zoom = function(level) {

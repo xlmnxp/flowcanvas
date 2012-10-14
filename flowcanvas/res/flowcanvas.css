@@ -14,7 +14,7 @@ position: absolute;
 display: inline-block;
 }
 
-.formcanvas-anchor-invisible {
+.flowcanvas-anchor-invisible {
 background-color: white;
 filter: alpha(opacity=1);
 opacity: 0.001;

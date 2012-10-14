@@ -87,10 +87,10 @@ background-image: url('flowcanvas/res/exclusivechoice48.png');
 background-image: url('flowcanvas/res/exclusivechoice48.png');
 }
 
-#workflow-item-email {
-background-image: url('flowcanvas/res/email256.png');
+#workflow-item-mail {
+background-image: url('flowcanvas/res/mail256.png');
 }
 
-#workflow-item-database {
+#workflow-item-db {
 background-image: url('flowcanvas/res/db256.png');
 }
