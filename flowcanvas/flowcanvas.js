@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // Object.getPrototypeOf is broken in IE :-(. Rough attempt of a workaround:
 if (!Object.getPrototypeOf) {
     if (typeof this.__proto__ === "object") {
-    	Object.getPrototypeOf = function (obj) {
+        Object.getPrototypeOf = function (obj) {
 			return obj.__proto__;
 		};
 	} else {
@@ -68,21 +68,125 @@ var FlowCanvasTrackable = function() {
     };
 };
 
+var _FlowCanvasObjectSerializer = function() {
+    this.serialize_item = function(obj) {
+        return {'handle': obj.get_handle(),
+                'top': obj.pos().top,
+                'left': obj.pos().left,
+                'overlay': obj._overlay ? true : false};
+    };
+
+    this.deserialize_item = function(canvas, data, obj) {
+        obj.pos(data.top, data.left);
+        if (data.overlay)
+            obj.overlay();
+        return obj;
+    };
+
+    this.serialize_custom = function(obj) {
+        var data = this.serialize_item(obj);
+        data.div = obj.container.html();
+        return data;
+    };
+
+    this.deserialize_custom = function(canvas, data) {
+        var obj = new FlowCanvasCustom(canvas, $(data.div));
+        return this.deserialize_item(canvas, data, obj);
+    };
+
+    this.serialize_image = function(obj) {
+        var data = this.serialize_item(obj);
+        data.src = obj.container.find('img').attr('src');
+        return data;
+    };
+
+    this.deserialize_image = function(canvas, data, obj) {
+        if (typeof obj === 'undefined')
+            obj = new FlowCanvasImage(canvas, data.src);
+        return this.deserialize_item(canvas, data, obj);
+    };
+
+    this.serialize_exclusivechoice = function(obj) {
+        return this.serialize_image(obj);
+    };
+
+    this.deserialize_exclusivechoice = function(canvas, data) {
+        var obj = new FlowCanvasExclusiveChoice(canvas);
+        return this.deserialize_image(canvas, data, obj);
+    };
+
+    this.serialize_mail = function(obj) {
+        return this.serialize_image(obj);
+    };
+
+    this.deserialize_mail = function(canvas, data) {
+        var obj = new FlowCanvasMail(canvas);
+        return this.deserialize_image(canvas, data, obj);
+    };
+
+    this.serialize_db = function(obj) {
+        return this.serialize_image(obj);
+    };
+
+    this.deserialize_db = function(canvas, data) {
+        var obj = new FlowCanvasDB(canvas);
+        return this.deserialize_image(canvas, data, obj);
+    };
+
+    this.serialize_canvas = function(canvas) {
+        var that = this;
+        var list = [];
+        canvas.div.find('.flowcanvas-item').each(function() {
+            var obj = $(this).data('obj');
+            list.push(obj.serialize(that));
+        });
+        return {'items': list};
+    };
+
+    this.deserialize_canvas = function(canvas, data) {
+        $.each(data.items, function(i, elem_data) {
+            var method = 'deserialize_' + elem_data.handle;
+            this[method](canvas, elem_data);
+        });
+    };
+};
+
+var _FlowCanvasJSONSerializer = function() {
+    this.serialize_canvas = function(canvas) {
+        return JSON.stringify(Object.getPrototypeOf(this).serialize_canvas(canvas));
+    };
+
+    this.deserialize_canvas = function(canvas, data) {
+        var proto = Object.getPrototypeOf(this);
+        return proto.deserialize_canvas(canvas, JSON.parse(data));
+    };
+};
+_FlowCanvasJSONSerializer.prototype = new _FlowCanvasObjectSerializer();
+var FlowCanvasJSONSerializer = new _FlowCanvasJSONSerializer();
+
 // ======================================================================
 // Canvas Items
 // ======================================================================
 var flowcanvas_items = {};
 
-function FlowCanvasItem(canvas, div, width, height) {
+function FlowCanvasItem(canvas, width, height) {
     if (arguments.length === 0) return;
+    if (typeof width === 'undefined')
+        width = 100;
+    if (typeof height === 'undefined')
+        height = 100;
+
     this.canvas = canvas;
     this.container = $('<div class="flowcanvas-item"></div>');
-    this.div = div;
+    this.container.data('obj', this);
     this._overlay = undefined;
-    this._toggle_options = {};
     this._inputs = [];
     this._outputs = [];
     var that = this;
+
+    this.get_handle = function() {
+        return 'item';
+    };
 
     this.anchor = function(inputs, outputs) {
         // Normalize arguments.
@@ -177,26 +281,18 @@ function FlowCanvasItem(canvas, div, width, height) {
         });
     };
 
-    // Add into a container. The reason is that some transformations on a div
-    // are not taken into consideration by jQuery, e.g. a zoomed div leads to
-    // incorrect drag and drop. This is a know jQuery issue. By hiding such
-    // tranformations within another, untransformed, div, we avoid such
-    // problems.
-    this.container.append(div);
+    this.serialize = function(serializer) {
+        return serializer.serialize_item(this);
+    };
+
+    // Add into the canvas.
     canvas.div.append(this.container);
     canvas.jp.draggable(this.container, {
         containment: canvas.div
     });
 
-    // By default position in the center.
-    if (typeof width === 'undefined')
-        width = this.div.width();
-    else
-        this.div.width(width);
-    if (typeof height === 'undefined')
-        height = this.div.height();
-    else
-        that.div.height(height);
+    this.container.width(width);
+    this.container.height(height);
     this.container.css('top', this.canvas.div.height() / 2 - height / 2);
     this.container.css('left', this.canvas.div.width() / 2 - width / 2);
 
@@ -210,33 +306,96 @@ function FlowCanvasItem(canvas, div, width, height) {
     });
 }
 
+FlowCanvasItem.prototype = new FlowCanvasTrackable();
+
+// -----------------------
+// Custom item
+// -----------------------
+function FlowCanvasCustom(canvas, div, width, height) {
+    if (arguments.length === 0) return;
+    FlowCanvasItem.call(this, canvas, width, height);
+
+    this.get_handle = function() {
+        return 'custom';
+    };
+
+    this.serialize = function(serializer) {
+        return serializer.serialize_custom(this);
+    };
+
+    // Add into a container (instead of replacing the container). The reason
+    // is that some transformations on a div
+    // are not taken into consideration by jQuery, e.g. a zoomed div leads to
+    // incorrect drag and drop. This is a know jQuery issue. By hiding such
+    // tranformations within another, untransformed, div, we avoid such
+    // problems.
+    this.container.append(div);
+    if (typeof width === 'undefined')
+        width = div.width();
+    else
+        div.width(width);
+    if (typeof height === 'undefined')
+        height = div.height();
+    else
+        div.height(height);
+
+    // By default position in the center.
+    this.container.css('top', this.canvas.div.height() / 2 - height / 2);
+    this.container.css('left', this.canvas.div.width() / 2 - width / 2);
+}
+
+FlowCanvasCustom.prototype = new FlowCanvasItem();
+FlowCanvasCustom.prototype.constructor = FlowCanvasCustom;
+flowcanvas_items.custom = FlowCanvasCustom;
+
 // -----------------------
 // Image
 // -----------------------
-FlowCanvasItem.prototype = new FlowCanvasTrackable();
-flowcanvas_items.item = FlowCanvasItem;
-
-function FlowCanvasImg(canvas, src, width, height) {
+function FlowCanvasImage(canvas, src, width, height) {
     if (arguments.length === 0) return;
+    FlowCanvasItem.call(this, canvas, width, height);
+
+    this.get_handle = function() {
+        return 'image';
+    };
+
+    this.serialize = function(serializer) {
+        return serializer.serialize_image(this);
+    };
+
     var img = $('<img/>');
     img.attr('src', src);
-    FlowCanvasItem.call(this, canvas, img, width, height);
+    img.attr('width', width);
+    img.attr('height', height);
+    this.container.append(img);
+    this.container.addClass('flowcanvas-item-' + this.get_handle());
 }
 
-FlowCanvasImg.prototype = new FlowCanvasItem();
-FlowCanvasImg.prototype.constructor = FlowCanvasImg;
-flowcanvas_items.image = FlowCanvasImg;
+FlowCanvasImage.prototype = new FlowCanvasItem();
+FlowCanvasImage.prototype.constructor = FlowCanvasImage;
+flowcanvas_items.image = FlowCanvasImage;
 
 // -----------------------
 // Exclusive choice
 // -----------------------
 function FlowCanvasExclusiveChoice(canvas) {
-    FlowCanvasImg.call(this,
-                       canvas, 'flowcanvas/res/exclusivechoice48.png', 48, 48);
+    FlowCanvasImage.call(this,
+                         canvas,
+                         'flowcanvas/res/exclusivechoice48.png',
+                         48, 48);
+
+    this.get_handle = function() {
+        return 'exclusivechoice';
+    };
+
+    this.serialize = function(serializer) {
+        return serializer.serialize_exclusivechoice(this);
+    };
+
     this.anchor('LeftMiddle', ['TopCenter', 'BottomCenter']);
 }
 
-FlowCanvasExclusiveChoice.prototype = new FlowCanvasImg();
+FlowCanvasExclusiveChoice.prototype = new FlowCanvasImage();
 FlowCanvasExclusiveChoice.prototype.constructor = FlowCanvasExclusiveChoice;
 flowcanvas_items.exclusivechoice = FlowCanvasExclusiveChoice;
 
@@ -244,11 +403,20 @@ flowcanvas_items.exclusivechoice = FlowCanvasExclusiveChoice;
 // Mail
 // -----------------------
 function FlowCanvasMail(canvas) {
-    FlowCanvasImg.call(this, canvas, 'flowcanvas/res/mail256.png', 96, 96);
+    FlowCanvasImage.call(this, canvas, 'flowcanvas/res/mail256.png', 96, 96);
+
+    this.get_handle = function() {
+        return 'mail';
+    };
+
+    this.serialize = function(serializer) {
+        return serializer.serialize_mail(this);
+    };
+
     this.make_target('LeftMiddle');
 }
 
-FlowCanvasMail.prototype = new FlowCanvasImg();
+FlowCanvasMail.prototype = new FlowCanvasImage();
 FlowCanvasMail.prototype.constructor = FlowCanvasMail;
 flowcanvas_items.mail = FlowCanvasMail;
 
@@ -256,11 +424,20 @@ flowcanvas_items.mail = FlowCanvasMail;
 // Database
 // -----------------------
 function FlowCanvasDB(canvas) {
-    FlowCanvasImg.call(this, canvas, 'flowcanvas/res/db256.png', 96, 96);
+    FlowCanvasImage.call(this, canvas, 'flowcanvas/res/db256.png', 96, 96);
+    
+    this.get_handle = function() {
+        return 'db';
+    };
+
+    this.serialize = function(serializer) {
+        return serializer.serialize_db(this);
+    };
+
     this.make_target('LeftMiddle');
 }
 
-FlowCanvasDB.prototype = new FlowCanvasImg();
+FlowCanvasDB.prototype = new FlowCanvasImage();
 FlowCanvasDB.prototype.constructor = FlowCanvasDB;
 flowcanvas_items.db = FlowCanvasDB;
 
@@ -276,7 +453,6 @@ var FlowCanvas = function(div) {
         HoverPaintStyle: {strokeStyle: 'red'},
         Overlays: [ ['PlainArrow', { location: 0.99, width: 18, length: 23 }] ],
         //Connector: ['Flowchart', { stub: 35, gap: 10} ],
-        //Endpoint: ['Dot', { cssClass: 'formcanvas-anchor-invisible' }],
         Endpoint: ['Dot', { radius: 10 }],
         Container: this.div
     });
@@ -296,5 +472,13 @@ var FlowCanvas = function(div) {
         if (typeof level === 'undefined')
             return this.div.css('zoom');
         this.div.animate({'zoom': level});
+    };
+
+    this.serialize = function(serializer) {
+        return serializer.serialize_canvas(this);
+    };
+
+    this.deserialize = function(serializer, data) {
+        return serializer.deserialize_canvas(this, data);
     };
 };

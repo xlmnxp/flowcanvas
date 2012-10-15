@@ -28,7 +28,7 @@ $(document).ready(function() {
     // Add some items to the canvas. By default, new items are centered in
     // the canvas.
     var div = $('<div style="background:#aaa"><h1>Foo Div</h1></div>');
-    var form = new FlowCanvasItem(canvas, div, 150, 150);
+    var form = new FlowCanvasCustom(canvas, div, 150, 150);
     form.move(0, -250);
     form.anchor(undefined, 'RightMiddle');
 
@@ -53,6 +53,15 @@ $(document).ready(function() {
             }
         });
     });
+
+    $('#serialize').click(function() {
+        alert(canvas.serialize(FlowCanvasJSONSerializer));
+    });
+
+    $('#serialize-deserialize').click(function() {
+        canvas.deserialize(FlowCanvasJSONSerializer,
+                           canvas.serialize(FlowCanvasJSONSerializer));
+    });
 });
 </script>
 
@@ -65,10 +74,9 @@ $(document).ready(function() {
         <div id="canvas"></div>
 
         <div id="sidebar">
-            <!--div id="buttons">
-                <input type="button" name="add" value="Add another Form"/>
-                <input type="button" name="save" value="Save this Form"/>
-            </div-->
+            <div id="buttons">
+                <input type="button" id="serialize" value="Serialize"/>
+            </div>
 
             <div id="sidebar-elements">
                 <h3>Control Flow</h3>
