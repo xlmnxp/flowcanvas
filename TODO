@@ -1,0 +1,7 @@
+- Complete the FlowCanvasJSONSerializer:
+   - (De)serialize endpoint objects (FlowCanvasItem._input and ._outputs)
+   - (De)serialize connection objects.
+   - Positions should be stored relative to the canvas, not to the page.
+- Add more workflow items.
+- Add a FlowCanvasXMLSerializer that serializes to SpiffWorkflow's XML format.
+- Add a FlowCanvasBPMNSerializer.
