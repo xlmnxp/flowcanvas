@@ -73,11 +73,17 @@ var _FlowCanvasObjectSerializer = function() {
         return {'handle': obj.get_handle(),
                 'top': obj.pos().top,
                 'left': obj.pos().left,
+                'inputs': obj._inputs_str,
+                'outputs': obj._outputs_str,
                 'overlay': obj._overlay ? true : false};
     };
 
     this.deserialize_item = function(canvas, data, obj) {
         obj.pos(data.top, data.left);
+        if (typeof data.inputs === 'undefined')
+            obj.make_target();
+        else
+            obj.anchors(data.inputs, data.outputs);
         if (data.overlay)
             obj.overlay();
         return obj;
@@ -180,7 +186,9 @@ function FlowCanvasItem(canvas, width, height) {
     this.container = $('<div class="flowcanvas-item"></div>');
     this.container.data('obj', this);
     this._overlay = undefined;
-    this._inputs = [];
+    this._inputs_str = [];  // Like this._inputs, but as passed to jsPlumb
+    this._outputs_str = [];  // Like this._outputs, but as passed to jsPlumb
+    this._inputs = []; // The jsPlumb anchors
     this._outputs = [];
     var that = this;
 
@@ -189,16 +197,6 @@ function FlowCanvasItem(canvas, width, height) {
     };
 
     this.anchor = function(inputs, outputs) {
-        // Normalize arguments.
-        if (typeof inputs === 'string')
-            inputs = [inputs];
-        else if (typeof inputs === 'undefined')
-            inputs = [];
-        if (typeof outputs === 'string')
-            outputs = [outputs];
-        else if (typeof outputs === 'undefined')
-            outputs = [];
-
         // Remove existing endpoints.
         $.each(this._inputs, function(index, endpoint) {
             that.canvas.jp.deleteEndpoint(endpoint);
@@ -209,8 +207,22 @@ function FlowCanvasItem(canvas, width, height) {
         this._inputs.length = 0;
         this._outputs.length = 0;
 
+        // Normalize arguments into a format that jsPlumb accepts.
+        if ($.isArray(inputs))
+            this._inputs_str = inputs;
+        else if (typeof inputs === 'undefined')
+            this._inputs_str = [];
+        else
+            this._inputs_str = [inputs];
+        if ($.isArray(outputs))
+            this._outputs_str = outputs;
+        else if (typeof outputs === 'undefined')
+            this._outputs_str = [];
+        else
+            this._outputs_str = [outputs];
+
         // Add incoming endpoints.
-        $.each(inputs, function(index, input) {
+        $.each(this._inputs_str, function(index, input) {
             var endpoint = that.canvas.jp.addEndpoint(that.container, {
                 isTarget: true,
                 anchor: input
@@ -219,7 +231,7 @@ function FlowCanvasItem(canvas, width, height) {
         });
 
         // Add outgoing endpoints.
-        $.each(outputs, function(index, output) {
+        $.each(this._outputs_str, function(index, output) {
             var endpoint = that.canvas.jp.addEndpoint(that.container, {
                 isSource: true,
                 anchor: output,
@@ -233,6 +245,7 @@ function FlowCanvasItem(canvas, width, height) {
         if (typeof anchor === 'undefined')
             anchor = 'Continuous';
         this._inputs = [this.container];
+        this._inputs_str = undefined;
         this.canvas.jp.makeTarget(this.container, {
             endpoint: ['Dot', { radius: 20, cssClass: 'flowcanvas-anchor-invisible' }],
             isTarget: true,
