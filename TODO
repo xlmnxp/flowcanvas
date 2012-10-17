@@ -1,5 +1,4 @@
 - Complete the FlowCanvasJSONSerializer:
-   - (De)serialize connection objects.
    - Positions should be stored relative to the canvas, not to the page.
 - Add more workflow items.
 - Add a FlowCanvasXMLSerializer that serializes to SpiffWorkflow's XML format.

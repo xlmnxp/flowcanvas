@@ -71,19 +71,26 @@ var FlowCanvasTrackable = function() {
 var _FlowCanvasObjectSerializer = function() {
     this.serialize_item = function(obj) {
         return {'handle': obj.get_handle(),
+                'id': obj.get_id(),
                 'top': obj.pos().top,
                 'left': obj.pos().left,
+                'width': obj.container.width(),
+                'height': obj.container.height(),
+                'target_anchor': obj._target_anchor,
                 'inputs': obj._inputs_str,
                 'outputs': obj._outputs_str,
                 'overlay': obj._overlay ? true : false};
     };
 
     this.deserialize_item = function(canvas, data, obj) {
+        obj.container.width(data.width);
+        obj.container.height(data.height);
+        obj.set_id(data.id);
         obj.pos(data.top, data.left);
-        if (typeof data.inputs === 'undefined')
-            obj.make_target();
+        if (typeof data.target_anchor !== 'undefined')
+            obj.make_target(data.target_anchor);
         else
-            obj.anchors(data.inputs, data.outputs);
+            obj.anchor(data.inputs, data.outputs);
         if (data.overlay)
             obj.overlay();
         return obj;
@@ -141,18 +148,48 @@ var _FlowCanvasObjectSerializer = function() {
 
     this.serialize_canvas = function(canvas) {
         var that = this;
-        var list = [];
+        var items = [];
         canvas.div.find('.flowcanvas-item').each(function() {
             var obj = $(this).data('obj');
-            list.push(obj.serialize(that));
+            items.push(obj.serialize(that));
         });
-        return {'items': list};
+        var connections = [];
+        $.each(canvas.jp.getConnections(), function (index, connection) {
+            var endpoints = connection.endpoints;
+            var source_ep = endpoints[0];
+            var target_ep = endpoints[1];
+            var source = source_ep.getElement().data('obj');
+            var target = target_ep.getElement().data('obj');
+            var source_ep_index = $.inArray(source_ep, source._outputs);
+            var target_ep_index = $.inArray(target_ep, target._inputs);
+            var source_id = source.get_id();
+            var target_id = target.get_id();
+            connections.push([
+                source_id, source_ep_index,
+                target_id, target_ep_index
+            ]);
+        });
+        return {'items': items, 'connections': connections};
     };
 
     this.deserialize_canvas = function(canvas, data) {
+        var that = this;
         $.each(data.items, function(i, elem_data) {
             var method = 'deserialize_' + elem_data.handle;
-            this[method](canvas, elem_data);
+            that[method](canvas, elem_data);
+        });
+        $.each(data.connections, function (index, connection) {
+            var source_id = connection[0];
+            var source_ep_index = connection[1];
+            var target_id = connection[2];
+            var target_ep_index = connection[3];
+            var source = $('#' + source_id);
+            var target = $('#' + target_id);
+            if (source_ep_index !== -1)
+                source = source.data('obj')._outputs[source_ep_index];
+            if (target_ep_index !== -1)
+                target = target.data('obj')._inputs[target_ep_index];
+            canvas.jp.connect({source: source, target: target});
         });
     };
 };
@@ -184,8 +221,10 @@ function FlowCanvasItem(canvas, width, height) {
 
     this.canvas = canvas;
     this.container = $('<div class="flowcanvas-item"></div>');
+    this.container.attr('id', "_autoid" + (new Date()).getTime());
     this.container.data('obj', this);
     this._overlay = undefined;
+    this._target_anchor = undefined; // only defined with jsPlumb.makeTarget
     this._inputs_str = [];  // Like this._inputs, but as passed to jsPlumb
     this._outputs_str = [];  // Like this._outputs, but as passed to jsPlumb
     this._inputs = []; // The jsPlumb anchors
@@ -194,6 +233,14 @@ function FlowCanvasItem(canvas, width, height) {
 
     this.get_handle = function() {
         return 'item';
+    };
+
+    this.set_id = function(id) {
+        this.container.attr('id', id);
+    };
+
+    this.get_id = function() {
+        return this.container.attr('id');
     };
 
     this.anchor = function(inputs, outputs) {
@@ -244,8 +291,9 @@ function FlowCanvasItem(canvas, width, height) {
     this.make_target = function(anchor) {
         if (typeof anchor === 'undefined')
             anchor = 'Continuous';
-        this._inputs = [this.container];
-        this._inputs_str = undefined;
+        this._target_anchor = anchor;
+        this._inputs.length = 0;
+        this._inputs_str = [];
         this.canvas.jp.makeTarget(this.container, {
             endpoint: ['Dot', { radius: 20, cssClass: 'flowcanvas-anchor-invisible' }],
             isTarget: true,
@@ -286,11 +334,13 @@ function FlowCanvasItem(canvas, width, height) {
     };
 
     this.connect = function(target) {
-        if (!this._outputs.length || !target._inputs.length)
+        if (!this._outputs.length)
+            return;
+        if (!target._inputs.length && !target._target_anchor)
             return;
         that.canvas.jp.connect({
             source: this._outputs[0],
-            target: target._inputs[0]
+            target: target._inputs.length ? target._inputs[0] : target.container
         });
     };
 
@@ -438,7 +488,7 @@ flowcanvas_items.mail = FlowCanvasMail;
 // -----------------------
 function FlowCanvasDB(canvas) {
     FlowCanvasImage.call(this, canvas, 'flowcanvas/res/db256.png', 96, 96);
-    
+
     this.get_handle = function() {
         return 'db';
     };
@@ -492,6 +542,8 @@ var FlowCanvas = function(div) {
     };
 
     this.deserialize = function(serializer, data) {
+        this.jp.deleteEveryEndpoint();
+        this.div.empty();
         return serializer.deserialize_canvas(this, data);
     };
 };
